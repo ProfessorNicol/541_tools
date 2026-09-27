@@ -9,7 +9,7 @@ from mc_aux import getNxtStateIdx, getIdxForState, \
 
 # sparse representation of a probability transition matrix, in scipy csr format
 
-def sparseSteadyStateDTMC(sP, diag):
+def SparseSteadyStateDTMC(sP, diag):
     """
     Compute the stationary distribution v of a finite irreducible
     discrete-time Markov chain, where
@@ -89,66 +89,46 @@ def sparseSteadyStateDTMC(sP, diag):
 
     return v
 
-def steadyStateDTMC(P):
-    n, _ = P.shape
-    try:
-        m_format = P.format
-    except:
-        m_format = "full"
+def SteadyStateDTMC(P):
+    P = np.asarray(P, dtype=float)
 
-    # check whether irreducible
+    if P.ndim != 2 or P.shape[0] != P.shape[1]:
+        raise ValueError("P must be a square matrix.")
+
+    if np.any(P < -1e-14):
+        raise ValueError("P contains negative transition probabilities.")
+
+    if not np.allclose(P.sum(axis=1), 1.0, atol=1e-12):
+        raise ValueError("Each row of P must sum to one.")
+
     if not isIrreducible(P):
-        print("not irreducible")
-        x=0
+        raise ValueError("P must be irreducible.")
 
+    n = P.shape[0]
 
-    # P provided is sparse
-    zero = np.zeros(n)
+    # v = vP is equivalent to (P.T - I)v = 0.
+    A = P.T - np.eye(n)
 
-    if m_format in ("csr", "csc"):
-        # create (P^T - I) with row n-1 set to 1.0s
+    # Replace one dependent equilibrium equation by sum(v) = 1.
+    A[-1, :] = 1.0
 
-        pI=[]; pJ=[]; pV = []
-        I, J, V = sparse.find(P) 
-        for idx in range(0, len(V)):  
-            i = I[idx]; j=J[idx]; pr=V[idx]
-            if j<n-1:
-                pI.append(j); pJ.append(i); pV.append( pr )
+    b = np.zeros(n)
+    b[-1] = 1.0
 
-        for i in range(0,n-1):
-            pI.append(i); pJ.append(i); pV.append(P[i,i]-1.0)
+    v = np.linalg.solve(A, b)
 
-        for j in range(0, n):
-            pI.append(n-1); pJ.append(j); pV.append(1.0)      
- 
-        sP = coo_array((pV,(pI,pJ)), shape=(n,n)).tocsc()
+    # Remove insignificant roundoff errors and renormalize.
+    v[np.abs(v) < 1e-15] = 0.0
 
-        zero[n-1] = 1.0
+    if np.any(v < -1e-10):
+        raise RuntimeError(
+            "The computed stationary distribution has negative components."
+        )
 
+    v = np.maximum(v, 0.0)
+    v /= v.sum()
 
-        pi = sparse.linalg.spsolve(sP, zero)
-        norm = np.sum(pi)
-        pi = pi/norm
-        for idx in range(len(pi)):
-            pi[idx] = max(0.0, pi[idx])
-        
-        return pi
-
-    for i in range(0,n-1):
-        P[i,i] = P[i,i] - 1.0
-                
-    for j in range(0,n):
-        P[n-1,j] = 1.0
-
-    zero[n-1] = 1.0
-    pi = linalg.solve(P, zero)
-    norm = np.sum(pi)
-    pi = pi/norm
-
-    for idx in range(len(pi)):
-        pi[idx] = max(0.0, pi[idx])
-
-    return pi
+    return v
 
 # PI_PtoK computes the vector matrix product pi * P^k .
 # The input is a full np two dimensional array.  The method

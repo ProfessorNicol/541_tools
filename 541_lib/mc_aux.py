@@ -103,8 +103,6 @@ def dictToSparse(Bdict, rows=None, transpose=False):
             # in case of diagonal, explicitly remember it
             if row==col and row in Bdict and col in Bdict[row]:
                 diag[row] = Bdict[row][col]
-            else:
-                diag[row] = 0.0
 
             # every element in dictionary included in the sparse construction input
             I.append(row); J.append(col); V.append(Bdict[row][col])
